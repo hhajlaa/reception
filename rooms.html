@@ -78,6 +78,8 @@ canvas.flap{display:block;}
 .tile.busy::before{background:var(--pink);}
 .tile.busy .s{color:var(--pink);}
 .tile.soon::before{background:linear-gradient(180deg,var(--blue),var(--pink));}
+.tile.idle::before{background:#3A4180;}
+.tile.idle .s{color:var(--muted);}
 
 .plate{position:absolute;bottom:-15px;left:50%;transform:translateX(-50%);
   padding:6px 22px;border-radius:999px;font-size:13px;letter-spacing:.28em;font-weight:700;color:#fff;
@@ -128,7 +130,7 @@ canvas.flap{display:block;}
 /* ================= CONFIG =================
    Live mode: open this page with  #api=<your function URL>
    e.g. rooms.html#api=https://flyakeed-rooms.azurewebsites.net/api/rooms?code=XXXX
-   Without #api the page runs on demo data.                                   */
+   Without #api the page lists the rooms only (no bookings).  Add #demo to preview with sample data. */
 var REFRESH_MS=60000;          // how often to pull bookings
 var DAYS_AHEAD=2;              // show bookings up to N days ahead
 var STARTING_MIN=15;           // "STARTING" status window
@@ -335,7 +337,8 @@ function hidePrivate(j){ var hidden={}; (j.rooms||[]).forEach(function(r){ if(is
   return {rooms:(j.rooms||[]).filter(function(r){ return !isHidden(r); }),
           events:(j.events||[]).filter(function(e){ return !hidden[String(e.room||'').toLowerCase()]; })}; }
 function load(){
-  if(!API){ DATA=demoData(); lastOk=Date.now(); badge.textContent='DEMO DATA'; badge.className='badge'; badge.style.display='block'; render(true); return; }
+  if(!API && /[#&]demo/.test(location.hash)){ DATA=demoData(); lastOk=Date.now(); badge.textContent='DEMO DATA'; badge.className='badge'; badge.style.display='block'; render(true); return; }
+  if(!API){ var d=demoData(); DATA={rooms:d.rooms,events:[],setup:true}; lastOk=Date.now(); render(true); return; }
   fetch(API,{cache:'no-store'}).then(function(r){ if(!r.ok) throw new Error(r.status); return r.json(); })
     .then(function(j){ DATA=hidePrivate(j); lastOk=Date.now(); badge.style.display='none'; render(true); })
     .catch(function(){ if(Date.now()-lastOk>5*60000){ badge.textContent='OFFLINE – SHOWING LAST UPDATE'; badge.className='badge offline'; badge.style.display='block'; } });
@@ -375,7 +378,8 @@ function render(force){
       cols={date:dayKey(x.s)===today?COL.pink:COL.soft, time:COL.white, dur:COL.soft, room:COL.white, loc:COL.blue, by:COL.white, status:st[1]};
       lamp=st[2]; o.el.className='row';
     } else {
-      vals={date:'',time:'',dur:'',room:(r===0?'NO BOOKINGS':''),loc:'',by:'',status:''}; cols={};
+      vals={date:'',time:'',dur:'',room:(r===0?(DATA&&DATA.setup?'LIVE BOOKINGS':'NO BOOKINGS'):''),loc:'',by:(r===0&&DATA&&DATA.setup?'COMING SOON':''),status:''};
+      cols={by:COL.pink};
       o.el.className='row'+(r===0?'':' empty');
     }
     o.lamp.className='lamp '+lamp;
@@ -397,7 +401,8 @@ function renderTiles(now){
     var mine=evs.filter(function(e){ return e.room===(r.email||'').toLowerCase() && e.e>now; }).sort(function(a,b){return a.s-b.s;});
     var cur=mine.filter(function(e){ return e.s<=now; })[0], nxt=mine.filter(function(e){ return e.s>now && dayKey(e.s)===dayKey(now); })[0];
     var cls='tile', state;
-    if(cur){
+    if(DATA.setup){ cls+=' idle'; state='BOOKINGS<small>COMING SOON</small>'; }
+    else if(cur){
       var until=cur.e; mine.forEach(function(e){ if(e.s<=until+60000 && e.e>until) until=e.e; });   // back-to-back meetings
       cls+=' busy'; state='IN USE<small>UNTIL '+hm(until)+'</small>';
     } else if(nxt){
